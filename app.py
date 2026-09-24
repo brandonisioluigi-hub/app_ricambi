@@ -12,7 +12,7 @@ st.divider()
 
 def formatta_data_it(valore):
     """Formatta la data in gg-mm-aaaa rimuovendo l'ora."""
-    if pd.isna(valore) or str(valore).strip() == "" or str(valore).strip() == "N/D":
+    if pd.isna(valore) or str(valore).strip() == "" or str(valore).strip().upper() in ["N/D", "NAN"]:
         return ""
     try:
         data_pulita = pd.to_datetime(valore, dayfirst=True)
@@ -32,7 +32,10 @@ def load_all_data():
     lista_df = []
     for file in tutti_i_file:
         try:
-            df = pd.read_excel(file)
+            # AGGIUNTA FONDAMENTALE: dtype=str
+            # Forza Python a leggere le celle esattamente come sono scritte in Excel (come Testo), 
+            # evitando che trasformi i codici in numeri decimali (.0) e che si mangi gli zeri iniziali!
+            df = pd.read_excel(file, dtype=str)
             df.columns = [str(col).strip().upper() for col in df.columns]
             
             for col in df.columns:
@@ -49,7 +52,11 @@ def load_all_data():
         df_completo = pd.concat(lista_df, ignore_index=True)
         if 'CODICE ARTICOLO' in df_completo.columns:
             df_completo['CODICE ARTICOLO'] = df_completo['CODICE ARTICOLO'].astype(str)
-            df_completo = df_completo.fillna("") 
+            
+            # Pulizia per rimuovere i "nan" (testuali) generati dalla lettura forzata come stringa
+            df_completo = df_completo.fillna("")
+            df_completo = df_completo.replace("nan", "")
+            
         return df_completo
     else:
         return pd.DataFrame()
@@ -79,55 +86,55 @@ else:
                         st.markdown(f"**🏷️ Articolo: {row.get('CODICE ARTICOLO', '')}**")
                         st.caption(f"📁 Macro Famiglia: **{row['FILE_ORIGINE']}** | 🗂️ Famiglia: {row.get('FAMIGLIA', '')}")
                         
-                        # 1. CERCA AUTOMATICAMENTE TUTTE LE REVISIONI (CE 1, CE 2, CE 3...)
+                        # 1. CERCA AUTOMATICAMENTE TUTTE LE REVISIONI
                         revisioni_trovate = []
                         for col in row.index:
                             if "CODICE RICAMBIO CE" in col:
-                                rev_num = col.replace("CODICE RICAMBIO CE", "").strip() # Estrae il numero "1", "2" ecc.
+                                rev_num = col.replace("CODICE RICAMBIO CE", "").strip() 
                                 val = str(row[col]).strip()
-                                # Registra la revisione solo se esiste un codice ricambio valido
-                                if val and val != "N/D":
+                                if val and val.upper() not in ["N/D", "NAN", ""]:
                                     revisioni_trovate.append(rev_num)
                         
-                        revisioni_trovate.sort() # Ordina logicamente 1, 2, 3...
+                        revisioni_trovate.sort() 
 
                         if revisioni_trovate:
-                            # 2. CREA LE "TABS" (SCHEDE NAVIGABILI) PER OGNI REVISIONE TROVATA
+                            # 2. CREA LE TABS
                             tabs = st.tabs([f"🔄 Revisione CE {rev}" for rev in revisioni_trovate])
                             
                             for idx, rev in enumerate(revisioni_trovate):
                                 with tabs[idx]:
                                     # Ricambio Principale
                                     cod_principale = str(row.get(f'CODICE RICAMBIO CE {rev}', '')).strip()
+                                    # Ulteriore sicurezza per eliminare eventuali vecchi ".0" residui
+                                    if cod_principale.endswith(".0"):
+                                        cod_principale = cod_principale[:-2]
                                     st.code(cod_principale, language="text")
                                     
                                     # Date
                                     col_d1, col_d2 = st.columns(2)
                                     data_att = str(row.get(f'DATA ATTIVAZIONE CE {rev}', '')).strip()
-                                    if data_att:
+                                    if data_att and data_att.upper() not in ["N/D", "NAN"]:
                                         col_d1.write(f"**🟢 Attivazione:** {data_att}")
                                         
                                     data_sos = str(row.get(f'DATA SOSPENSIONE CE {rev}', '')).strip()
-                                    if data_sos:
+                                    if data_sos and data_sos.upper() not in ["N/D", "NAN"]:
                                         col_d2.write(f"**🔴 Sospensione:** {data_sos}")
                                         
-                                    # 3. RICERCA DINAMICA DI COLONNE FUTURE PER QUESTA STESSA REVISIONE
-                                    # Cerca qualsiasi altra colonna che finisca per "CE 1" (o la revisione corrente)
+                                    # 3. RICERCA DINAMICA DI ALTRI COMPONENTI
                                     altri_dati = {}
                                     for col in row.index:
                                         if f"CE {rev}" in col or f"CE{rev}" in col:
-                                            # Escludiamo le tre colonne che abbiamo già stampato qui sopra
                                             if col not in [f'CODICE RICAMBIO CE {rev}', f'DATA ATTIVAZIONE CE {rev}', f'DATA SOSPENSIONE CE {rev}']:
                                                 val = str(row[col]).strip()
-                                                if val and val != "N/D":
+                                                if val.endswith(".0") and val.replace(".", "").isdigit():
+                                                    val = val[:-2]
+                                                if val and val.upper() not in ["N/D", "NAN", ""]:
                                                     altri_dati[col] = val
                                                     
-                                    # Se trova altri ricambi/dati per questa revisione, li stampa in un elenco puntato
                                     if altri_dati:
-                                        st.markdown("---") # Linea di separazione
+                                        st.markdown("---") 
                                         st.markdown(f"**📌 Altri componenti (Revisione CE {rev}):**")
                                         for k, v in altri_dati.items():
-                                            # Pulisce il nome della colonna per togliere "CE 1" e renderlo leggibile
                                             nome_pulito = k.replace(f"CE {rev}", "").replace(f"CE{rev}", "").strip().title()
                                             st.write(f"- **{nome_pulito}:** {v}")
 
@@ -136,7 +143,7 @@ else:
                         
                         # Espansore dati grezzi
                         with st.expander("Mostra tutti i dati della riga"):
-                            row_filtrata = row[row != ""]
+                            row_filtrata = row[(row != "") & (row != "nan")]
                             st.dataframe(pd.DataFrame(row_filtrata).T, hide_index=True)
                             
             else:
