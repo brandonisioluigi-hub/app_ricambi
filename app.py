@@ -3,12 +3,13 @@ import pandas as pd
 import os
 import glob
 
-# Imposta la pagina e un po' di CSS personalizzato per le "Card"
+# Imposta la pagina
 st.set_page_config(layout="wide", page_title="Ricerca Ricambi", page_icon="⚙️")
 
-st.title("⚙️ Ricerca Ricambi - Archivio Globale")
-st.markdown("Cerca il **Codice Articolo** attraverso tutte le Macro Famiglie per trovare immediatamente il ricambio corretto.")
-st.divider() # Aggiunge una linea orizzontale per separare il titolo
+# Titoli rimpiccioliti (usiamo un header più piccolo invece del title)
+st.header("⚙️ Ricerca Ricambi - Archivio Globale")
+st.write("Cerca il **Codice Articolo** attraverso tutte le Macro Famiglie per trovare immediatamente il ricambio corretto.")
+st.divider()
 
 @st.cache_data
 def load_all_data():
@@ -34,8 +35,8 @@ def load_all_data():
         df_completo = pd.concat(lista_df, ignore_index=True)
         if 'CODICE ARTICOLO' in df_completo.columns:
             df_completo['CODICE ARTICOLO'] = df_completo['CODICE ARTICOLO'].astype(str)
-            # Riempiamo i campi vuoti con "N/D" per una migliore estetica
-            df_completo = df_completo.fillna("N/D")
+            # Invece di "N/D", questa volta manteniamo i valori vuoti per gestirli dopo
+            df_completo = df_completo.fillna("") 
         return df_completo
     else:
         return pd.DataFrame()
@@ -45,60 +46,65 @@ dati = load_all_data()
 if dati.empty:
     st.error("Nessun dato trovato nella cartella 'dati'.")
 else:
-    # Mettiamo la barra di ricerca in evidenza
+    # Barra di ricerca
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         ricerca = st.text_input("🔍 INSERISCI IL CODICE ARTICOLO:", "", placeholder="Es. 60990")
     
-    st.write("") # Spazio vuoto
+    st.write("") 
 
     if ricerca:
         if 'CODICE ARTICOLO' in dati.columns:
-            # Ricerca esatta o parziale
             risultati = dati[dati['CODICE ARTICOLO'].str.contains(ricerca, case=False, na=False)]
             
             if not risultati.empty:
                 st.success(f"Trovati {len(risultati)} risultati per '{ricerca}'")
                 
-                # Invece della tabella, creiamo delle schede per ogni risultato
                 for index, row in risultati.iterrows():
-                    with st.container(border=True): # Crea un box con bordo per ogni risultato
+                    with st.container(border=True): 
                         
-                        # Intestazione della scheda
-                        st.subheader(f"🏷️ Articolo: {row.get('CODICE ARTICOLO', 'N/D')}")
-                        st.caption(f"📁 Macro Famiglia: **{row['FILE_ORIGINE']}** | 🗂️ Famiglia: {row.get('FAMIGLIA', 'N/D')}")
+                        # Intestazione della scheda (rimpicciolita con markdown)
+                        st.markdown(f"**🏷️ Articolo: {row.get('CODICE ARTICOLO', '')}**")
+                        st.caption(f"📁 Macro Famiglia: **{row['FILE_ORIGINE']}** | 🗂️ Famiglia: {row.get('FAMIGLIA', '')}")
                         
-                        # Creiamo delle colonne interne per i dettagli dei ricambi
-                        col_r1, col_r2, col_r3 = st.columns(3)
+                        col_r1, col_r2 = st.columns(2)
                         
                         # Blocco CE 1
                         with col_r1:
-                            st.markdown("### 🛠️ Ricambio CE 1")
-                            cod_ce1 = row.get('CODICE RICAMBIO CE 1', 'N/D')
-                            if cod_ce1 != "N/D":
-                                st.code(cod_ce1, language="text") # Evidenzia il codice
-                            else:
-                                st.write("Nessun ricambio")
-                            st.write(f"**Dal:** {row.get('DATA ATTIVAZIONE CE 1', 'N/D')}")
-                            st.write(f"**Al:** {row.get('DATA SOSPENSIONE CE 1', 'N/D')}")
+                            cod_ce1 = str(row.get('CODICE RICAMBIO CE 1', '')).strip()
+                            # Controlliamo se c'è un ricambio valido (diverso da vuoto o "N/D")
+                            if cod_ce1 and cod_ce1 != "N/D":
+                                st.markdown("**🛠️ Ricambio CE 1**")
+                                st.code(cod_ce1, language="text")
+                                
+                                # Mostriamo le date solo se esistono
+                                data_att_ce1 = str(row.get('DATA ATTIVAZIONE CE 1', '')).strip()
+                                if data_att_ce1 and data_att_ce1 != "N/D":
+                                    st.write(f"**Dal:** {data_att_ce1}")
+                                    
+                                data_sos_ce1 = str(row.get('DATA SOSPENSIONE CE 1', '')).strip()
+                                if data_sos_ce1 and data_sos_ce1 != "N/D":
+                                    st.write(f"**Al:** {data_sos_ce1}")
                             
-                        # Blocco CE 2 (se esiste)
+                        # Blocco CE 2 (si vede SOLO se esiste il ricambio)
                         with col_r2:
-                            st.markdown("### 🔧 Ricambio CE 2")
-                            cod_ce2 = row.get('CODICE RICAMBIO CE 2', 'N/D')
-                            if cod_ce2 != "N/D" and str(cod_ce2).strip() != "":
+                            cod_ce2 = str(row.get('CODICE RICAMBIO CE 2', '')).strip()
+                            if cod_ce2 and cod_ce2 != "N/D":
+                                st.markdown("**🔧 Ricambio CE 2**")
                                 st.code(cod_ce2, language="text")
-                            else:
-                                st.write("Nessun ricambio")
-                            st.write(f"**Dal:** {row.get('DATA ATTIVAZIONE CE 2', 'N/D')}")
-                            st.write(f"**Al:** {row.get('DATA SOSPENSIONE CE 2', 'N/D')}")
-                            
-                        # Puoi aggiungere un terzo blocco col_r3 per altre info (es. note) se vuoi!
+                                
+                                data_att_ce2 = str(row.get('DATA ATTIVAZIONE CE 2', '')).strip()
+                                if data_att_ce2 and data_att_ce2 != "N/D":
+                                    st.write(f"**Dal:** {data_att_ce2}")
+                                    
+                                data_sos_ce2 = str(row.get('DATA SOSPENSIONE CE 2', '')).strip()
+                                if data_sos_ce2 and data_sos_ce2 != "N/D":
+                                    st.write(f"**Al:** {data_sos_ce2}")
                         
-                        # Se l'utente vuole comunque vedere la tabella grezza di questo singolo articolo
-                        with st.expander("Mostra tutti i dati grezzi dell'articolo"):
-                            # Filtriamo solo le colonne che non sono N/D per pulire la vista
-                            row_filtrata = row[row != "N/D"]
+                        # Espansore per i dati grezzi
+                        with st.expander("Mostra tutti i dati della riga"):
+                            # Filtriamo solo le colonne che non sono vuote
+                            row_filtrata = row[row != ""]
                             st.dataframe(pd.DataFrame(row_filtrata).T, hide_index=True)
                             
             else:
