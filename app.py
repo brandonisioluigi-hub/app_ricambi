@@ -6,10 +6,22 @@ import glob
 # Imposta la pagina
 st.set_page_config(layout="wide", page_title="Ricerca Ricambi", page_icon="⚙️")
 
-# Titoli rimpiccioliti (usiamo un header più piccolo invece del title)
 st.header("⚙️ Ricerca Ricambi - Archivio Globale")
 st.write("Cerca il **Codice Articolo** attraverso tutte le Macro Famiglie per trovare immediatamente il ricambio corretto.")
 st.divider()
+
+# --- NUOVA FUNZIONE PER FORMATTARE LE DATE ---
+def formatta_data_it(valore):
+    """Formatta la data in gg-mm-aaaa rimuovendo l'ora. Ignora i testi."""
+    if pd.isna(valore) or str(valore).strip() == "" or str(valore).strip() == "N/D":
+        return ""
+    try:
+        # Tenta di convertire in data. dayfirst=True assicura che 10/11 sia letto come 10 Novembre.
+        data_pulita = pd.to_datetime(valore, dayfirst=True)
+        return data_pulita.strftime('%d-%m-%Y')
+    except:
+        # Se non è una data (es. c'è scritto testo), lascia il testo e rimuove orari finti.
+        return str(valore).replace(" 00:00:00", "").strip()
 
 @st.cache_data
 def load_all_data():
@@ -25,6 +37,13 @@ def load_all_data():
         try:
             df = pd.read_excel(file)
             df.columns = [str(col).strip().upper() for col in df.columns]
+            
+            # --- APPLICHIAMO LA FORMATTAZIONE DELLE DATE ---
+            # Cerchiamo tutte le colonne che contengono la parola "DATA" e le formattiamo
+            for col in df.columns:
+                if 'DATA' in col:
+                    df[col] = df[col].apply(formatta_data_it)
+                    
             nome_macro_famiglia = os.path.basename(file).replace('.xlsx', '')
             df.insert(0, 'FILE_ORIGINE', nome_macro_famiglia)
             lista_df.append(df)
@@ -35,7 +54,6 @@ def load_all_data():
         df_completo = pd.concat(lista_df, ignore_index=True)
         if 'CODICE ARTICOLO' in df_completo.columns:
             df_completo['CODICE ARTICOLO'] = df_completo['CODICE ARTICOLO'].astype(str)
-            # Invece di "N/D", questa volta manteniamo i valori vuoti per gestirli dopo
             df_completo = df_completo.fillna("") 
         return df_completo
     else:
@@ -63,7 +81,6 @@ else:
                 for index, row in risultati.iterrows():
                     with st.container(border=True): 
                         
-                        # Intestazione della scheda (rimpicciolita con markdown)
                         st.markdown(f"**🏷️ Articolo: {row.get('CODICE ARTICOLO', '')}**")
                         st.caption(f"📁 Macro Famiglia: **{row['FILE_ORIGINE']}** | 🗂️ Famiglia: {row.get('FAMIGLIA', '')}")
                         
@@ -72,21 +89,19 @@ else:
                         # Blocco CE 1
                         with col_r1:
                             cod_ce1 = str(row.get('CODICE RICAMBIO CE 1', '')).strip()
-                            # Controlliamo se c'è un ricambio valido (diverso da vuoto o "N/D")
                             if cod_ce1 and cod_ce1 != "N/D":
                                 st.markdown("**🛠️ Ricambio CE 1**")
                                 st.code(cod_ce1, language="text")
                                 
-                                # Mostriamo le date solo se esistono
                                 data_att_ce1 = str(row.get('DATA ATTIVAZIONE CE 1', '')).strip()
-                                if data_att_ce1 and data_att_ce1 != "N/D":
+                                if data_att_ce1:
                                     st.write(f"**Dal:** {data_att_ce1}")
                                     
                                 data_sos_ce1 = str(row.get('DATA SOSPENSIONE CE 1', '')).strip()
-                                if data_sos_ce1 and data_sos_ce1 != "N/D":
+                                if data_sos_ce1:
                                     st.write(f"**Al:** {data_sos_ce1}")
                             
-                        # Blocco CE 2 (si vede SOLO se esiste il ricambio)
+                        # Blocco CE 2
                         with col_r2:
                             cod_ce2 = str(row.get('CODICE RICAMBIO CE 2', '')).strip()
                             if cod_ce2 and cod_ce2 != "N/D":
@@ -94,16 +109,15 @@ else:
                                 st.code(cod_ce2, language="text")
                                 
                                 data_att_ce2 = str(row.get('DATA ATTIVAZIONE CE 2', '')).strip()
-                                if data_att_ce2 and data_att_ce2 != "N/D":
+                                if data_att_ce2:
                                     st.write(f"**Dal:** {data_att_ce2}")
                                     
                                 data_sos_ce2 = str(row.get('DATA SOSPENSIONE CE 2', '')).strip()
-                                if data_sos_ce2 and data_sos_ce2 != "N/D":
+                                if data_sos_ce2:
                                     st.write(f"**Al:** {data_sos_ce2}")
                         
-                        # Espansore per i dati grezzi
+                        # Espansore dati grezzi
                         with st.expander("Mostra tutti i dati della riga"):
-                            # Filtriamo solo le colonne che non sono vuote
                             row_filtrata = row[row != ""]
                             st.dataframe(pd.DataFrame(row_filtrata).T, hide_index=True)
                             
